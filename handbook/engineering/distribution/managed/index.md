@@ -4,6 +4,8 @@ This documentation details how the Distribution team at Sourcegraph internally h
 
 Please first read [the customer-facing managed instance documentation](https://docs.sourcegraph.com/admin/install/managed) to understand what these are and what we provide.
 
+![architecture](https://storage.googleapis.com/sourcegraph-assets/managed-instance-architecture.png)
+
 ## Technical details
 
 ### Deployment type and scaling
@@ -64,6 +66,7 @@ Creating a new managed instance involves following the steps below.
    - Email: `managed+$COMPANY@sourcegraph.com` (note `+` sign not `-`)
    - Username: `sourcegraph-admin`
    - Password: Use the password previously created and stored in 1password.
+1. Configure `externalURL` in the site configuration.
 
 ### Accessing a managed instance
 
