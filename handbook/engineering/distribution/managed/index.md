@@ -17,9 +17,15 @@ Please first read [the customer-facing managed instance documentation](https://d
   - [Finding the external IPs](#finding-the-external-ips)
   - [Impact of recreating the instance via Terraform](#impact-of-recreating-the-instance-via-terraform)
   - []
+- [Upgrade process](#upgrade-process) 
+  - [1) Add a banner indicating scheduled maintenance is in progress](#1-add-a-banner-indicating-scheduled-maintenance-is-in-progress)
+  - [2) Mark the database as ready-only](#2-mark-the-database-as-ready-only)
+  - TODO(slimsag)
 - [Startup scripts](#startup-scripts)
   - [Instance is recreated when startup script changes](#instance-is-recreated-when-startup-script-changes)
   - [Debugging startup scripts](#debugging-startup-scripts)
+- [FAQ](#faq)
+  - [FAQ: Why did we choose Docker Compose over Kubernetes deployments?](#faq-why-did-we-choose-docker-compose-over-kubernetes-deployments)
 
 ## Technical details
 
@@ -202,7 +208,9 @@ More details: https://cloud.google.com/compute/docs/startupscript
 
 ### 1) Add a banner indicating scheduled maintenance is in progress
 
-### 1) Mark the database as ready-only
+TODO(slimsag) make this section public
+
+### 2) Mark the database as ready-only
 
 Mark the database as read-only:
 
@@ -222,9 +230,13 @@ During this time:
 - User settings and site configuration cannot be updated
 - Extensions cannot be installed
 
-## Dev FAQ
+### ...
 
-### Dev FAQ: Why did we choose Docker Compose over Kubernetes deployments?
+TODO(slimsag) make this section public
+
+## FAQ
+
+### FAQ: Why did we choose Docker Compose over Kubernetes deployments?
 
 Managed instances is an interim solution to having the Sourcegraph.com Cloud natively support multi-tenant private repositories. The thinking has been that:
 
