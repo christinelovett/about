@@ -249,4 +249,3 @@ Additionally, we noted the following:
 - For the first customer requesting managed instances, we had a spin-up time of approx ~3d only.
 
 None of this is to say that we will not consider switching said managed instances to Kubernetes in the future under different circumstances - it is just to say we are not doing that today.
-
