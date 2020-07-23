@@ -94,14 +94,16 @@ Creating a new managed instance involves following the steps below.
 1. Access the instance over SSH and confirm all containers are healthy (instructions below).
 1. In the infrastructure repository, [create a DNS entry](https://github.com/sourcegraph/infrastructure/blob/master/dns/sourcegraph-managed.tf) that points `$COMPANY.sourcegraph.com` to the `prod-global-address` IP following "Finding the external load balancer IP" below.
 1. In the GCP web UI under **Network services** > **Load balancers** > select the load balancer > watch the SSL certificate status. It may take some time for it to become active.
-1. Confirm 
+1. Confirm all containers come up healthy (`docker ps` should report them as such)
 1. Create a PR for review.
-1. Access the instance over HTTP (instructions below)
+1. Access the Sourcegraph web UI (instructions for port-forwarding below)
+1. Navigate to Grafana and confirm the instance looks healthy.
 1. Set up the initial admin account (for use by the Sourcegraph team only)
    - Email: `managed+$COMPANY@sourcegraph.com` (note `+` sign not `-`)
    - Username: `sourcegraph-admin`
    - Password: Use the password previously created and stored in 1password.
 1. Configure `externalURL` in the site configuration.
+1. In the global user settings, set `"alerts.showPatchUpdates": false`
 
 ## Operation access
 
@@ -128,7 +130,7 @@ Users access Sourcegraph through GCP Load Balancer/HTTPS -> the Caddy load balan
 You can workaround this by proxying your internet traffic through the instance itself - which is allowed to reach and go through the public internet -> the GCP load balancer -> back to the instance itself. To do this, create a SOCKS5 proxy tunnel over SSH:
 
 ```ssh
-bash -c '(gcloud beta compute ssh --zone "us-central1-f" --tunnel-through-iap --project "sourcegraph-managed-tinder" prod -- -N -p 22 -D localhost:5000) & sleep 600; kill $!'
+bash -c '(gcloud beta compute ssh --zone "us-central1-f" --tunnel-through-iap --project "sourcegraph-managed-$COMPANY" prod -- -N -p 22 -D localhost:5000) & sleep 600; kill $!'
 ```
 
 Then test you can access it using `curl`:
@@ -162,13 +164,14 @@ You can then use regular Docker commands (e.g. `docker exec -it $CONTAINER sh`) 
 
 ```sh
 $ gcloud compute addresses list --project=sourcegraph-managed-$COMPANY
-NAME                  ADDRESS/RANGE  TYPE      PURPOSE  NETWORK  REGION       SUBNET  STATUS
-prod-global-address   $GLOBAL_IP     EXTERNAL                                         IN_USE
-prod-nat-manual-ip-0  $GLOBAL_NAT    EXTERNAL                    us-central1          IN_USE
+NAME                     ADDRESS/RANGE   TYPE      PURPOSE  NETWORK  REGION       SUBNET  STATUS
+default-global-address   $GLOBAL_IP      EXTERNAL                                         IN_USE
+default-nat-manual-ip-0  $NAT_IP_ONE     EXTERNAL                    us-central1          IN_USE
+default-nat-manual-ip-1  $NAT_IP_TWO     EXTERNAL                    us-central1          IN_USE
 ```
 
-- `prod-global-address` is the IP address that `$COMPANY.sourcegraph.com` should point to, it is the address of the GCP Load Balancer.
-- `prod-nat-manual-ip-0` is the external IP from which egress traffic from the deployment will originate from. This is the IP the customer will need to allow to access e.g. their code host.
+- `$GLOBAL_IP` is the IP address that `$COMPANY.sourcegraph.com` should point to, it is the address of the GCP Load Balancer.
+- `$NAT_IP_ONE` and `$NAT_IP_TWO` are the external IPs from which egress traffic from the deployment will originate from. These are the addresses from which Sourcegraph will access the customer's code host, and as such the customer will need to allow them access to e.g. their internal code host.
 
 ### Impact of recreating the instance via Terraform
 
@@ -208,13 +211,23 @@ More details: https://cloud.google.com/compute/docs/startupscript
 
 ### 1) Add a banner indicating scheduled maintenance is in progress
 
-TODO(slimsag) make this section public
+Add to the global user settings:
+
+```jsonc
+  "notices": [
+    {
+      "dismissible": false,
+      "location": "top",
+      "message": "🚀 Sourcegraph is undergoing a scheduled upgrade ([what's changed?](https://about.sourcegraph.com/blog/)). You may be unable to perform some write actions during this time, such as updating your user settings."
+    }
+  ]
+```
 
 ### 2) Mark the database as ready-only
 
 Mark the database as read-only:
 
-```
+```sh
 docker exec -it pgsql psql -U sg -c 'ALTER DATABASE sg SET default_transaction_read_only = true;'
 ```
 
@@ -234,7 +247,27 @@ During this time:
 
 TODO(slimsag) make this section public
 
+### 3) Make the database writable again
+
+```sh
+docker exec -it pgsql psql -U sg -c 'set transaction read write; ALTER DATABASE sg SET default_transaction_read_only = false;'
+```
+
+### 4) Remove the banner indicating scheduled maintenance is in progress
+
+Remove the notice previously added to the global user settings.
+
+### ...
+
+TODO(slimsag) make this section public
+
 ## FAQ
+
+### FAQ: Can customers disable the "Builtin username-password authentication"?
+
+No, this is required in order for Sourcegraph to access the instance and debug issues through the initial admin account.
+
+However, it does not need to be used by the customer or their users at all. The default login method can be configured to their SSO provider of choice.
 
 ### FAQ: Why did we choose Docker Compose over Kubernetes deployments?
 
@@ -261,3 +294,15 @@ Additionally, we noted the following:
 - For the first customer requesting managed instances, we had a spin-up time of approx ~3d only.
 
 None of this is to say that we will not consider switching said managed instances to Kubernetes in the future under different circumstances - it is just to say we are not doing that today.
+
+### FAQ: "googleapi: Error 400: The network_endpoint_group resource ... is already being used"
+
+If `terraform apply` is giving you:
+
+```
+Error: Error when reading or editing NetworkEndpointGroup: googleapi: Error 400: The network_endpoint_group resource 'projects/sourcegraph-managed-$COMPANY/zones/us-central1-f/networkEndpointGroups/prod-neg' is already being used by 'projects/sourcegraph-managed-$COMPANY/global/backendServices/prod-backend-service', resourceInUseByAnotherResource
+```
+
+Or similar - this indicates a bug in Terraform where GCP requires an associated resource to be deleted first and Terraform is trying to delete (or create) that resource in the wrong order.
+
+To workaround the issue, locate the resource in GCP yourself and delete it manually and then `terraform apply` again.
